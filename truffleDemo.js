@@ -1,4 +1,5 @@
-// You need to install npm package truffle-hdwallet-provider locally (at the root of your truffle project)
+// Rename this file truffle.js and make the changes below
+// If testing on ropsten (or other testnet), You need to install npm package truffle-hdwallet-provider locally (at the root of your truffle project)
 var HDWalletProvider = require("truffle-hdwallet-provider");
 var mnemonic = "wallet words from metamask here";
 module.exports = {
