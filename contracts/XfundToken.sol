@@ -213,10 +213,12 @@ contract XfundToken is owned, TokenERC20 {
         inflation = InflationData({lastUpdate: block.number, blockRewardLimit: blockRewardLimit, highestLimit: blockRewardLimit, blocksToAverage: blocksToAverage, alpha: 2 * 10**9 / (blocksToAverage + 1), averageBlockReward: 0});
     }
 
+    /// @notice Turn off token transfers in case of emergency
     function disableToken(address _newToken) onlyOwner public {
         tokenActive = false;
         supersedingToken = _newToken;
     }
+    /// @notice Re-activate token transfers
     function enableToken() onlyOwner public {
         tokenActive = true;
     }
@@ -245,6 +247,8 @@ contract XfundToken is owned, TokenERC20 {
         Transfer(_from, _to, _value);
     }
 
+    /// @notice Vote for `_nominee` to enter congress
+    /// @param _nominee Ethereum address of person you are voting for
     function voteOnCongress(address _nominee) public {
         require(_nominee != 0x0);
         require(!frozenAccount[msg.sender]);                       // Check if recipient is frozen
@@ -255,9 +259,12 @@ contract XfundToken is owned, TokenERC20 {
         totalVotedTokens += balanceOf[msg.sender];
     }
 
+    /// @notice Remove your vote, so that you can vote for someone else
     function unvoteCongress() public {
         _unvoteCongress(msg.sender);
     }
+
+    /* Internal function can only be called by other functions in this contract */
     function _unvoteCongress(address _account) internal {
 		address nominee = voteList[_account];
         require(nominee != 0x0);
@@ -286,6 +293,9 @@ contract XfundToken is owned, TokenERC20 {
         Transfer(this, _recipient, _mintedAmount);
     }
 
+    /// @notice Update token inflation parameters with `_blockRewardLimit` and `_blocksToAverage`
+    /// @param _blockRewardLimit Prohibit minting new tokens at an average rate above this limit
+    /// @param _blocksToAverage Number of blocks to include in EMA of token inflation
     function updateInflationParams(uint _blockRewardLimit, uint _blocksToAverage) onlyOwner public {
         require(_blocksToAverage > minBlocksToAverage);
         if (_blockRewardLimit > inflation.highestLimit) inflation.highestLimit = _blockRewardLimit;
@@ -294,6 +304,8 @@ contract XfundToken is owned, TokenERC20 {
 		inflation.alpha = 2 * 10**9 / (inflation.blocksToAverage + 1);
     }
 
+    /// @notice Track inflation of token supply each time `_newTokens` tokens are minted
+    /// @param _newTokens Number of new tokens created
     function updateInflation(uint _newTokens) internal {
         uint256 elapsedBlocks = block.number - inflation.lastUpdate;
         for (uint16 i=0; i<elapsedBlocks; i++) {
@@ -307,9 +319,11 @@ contract XfundToken is owned, TokenERC20 {
         }
         inflation.lastUpdate = block.number;
     }
+    /// @notice Let anyone update the average inflation per block
 	function updateInflationPublic() public {
 		updateInflation(0);
 	}
+    /// @notice Get current average new tokens minted per block
     function getInflation() constant public returns (uint256 averageBlockReward) {
         return inflation.averageBlockReward;
     }

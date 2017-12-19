@@ -43,8 +43,8 @@ interface XfundToken {
 }
 
 contract XfundCongress is owned, tokenRecipient {
-    uint256 constant december25 = 1514188800;
-    uint256 constant january1 = 1514793600;
+    uint256 constant december25UTC = 1514188800;
+    uint256 constant january1UTC = 1514793600;
     address supersedingCongress;
     bool congressActive = true;
     // Congress Parameters
@@ -125,34 +125,67 @@ contract XfundCongress is owned, tokenRecipient {
         members[0] = Member({memberAddress: msg.sender, memberSince: now, description: "Founding Member", identityLink: ""});
     }
 
+    /**
+     * Make a deposit to the Xfund
+     *
+     */
     function deposit() payable public {
         deposits[msg.sender] += msg.value;
     }
+
+    /**
+     * Get back your deposit between dec25 and jan1 if total funds raised < 5 ether
+     *
+     */
     function projectFailedWithdraw() public {
-        require(now > december25 and now < january1);
+        require(now > december25UTC && now < january1UTC);
         require(this.balance < 5 ether);
-        uint256 deposit = deposits[msg.sender];
+        uint256 donorDeposit = deposits[msg.sender];
         deposits[msg.sender] = 0;
-        msg.sender.send(deposits[msg.sender]);
+        msg.sender.transfer(donorDeposit);
     }
 
+    /**
+     * To upgrade this contract with a replacement
+     *
+     * @param _newCongress The address of the upgraded contract
+     * @param _newOwner who becomes the owner of this contract since it can no longer call onlyOwner functions itself
+     */
     function upgrade(address _newCongress, address _newOwner) onlyOwner public {
         congressActive = false;
         supersedingCongress = _newCongress;
         owner = _newOwner;
     }
+    /**
+     * When further upgrades occur, keep `supersedingCongress` up to date
+     *
+     * @param _newCongress The address of the most current contract
+     */
     function updateCurrentCongress(address _newCongress) onlyOwner public {
         supersedingCongress = _newCongress;
     }
 
-    function changeCongressSize(uint16 _newSize) onlyOwner public returns (uint256 size) {
+    /**
+     * Change the size of congress and update `minimumQuorum`
+     *
+     * @param _newSize New size of congress
+     * @param _minimumQuorum New quorum to pass proposals
+     */
+    function changeCongressSize(uint16 _newSize, uint256 _minimumQuorum) onlyOwner public returns (uint256 size) {
         members.length = _newSize;
+        minimumQuorum = _minimumQuorum;
         NewCongressSize(members.length, msg.sender);
         return members.length;
     }
 
-    // the 0x0 address is blocked from votes by xfundToken.voteOnCongress(...). This is important.
+    /**
+     * Join congress if you have more votes than the minimum congressperson
+     *
+     * @param _identityDescription Description of yourself, most likely your name
+     * @param _identityLink Link to any online profile, such as an ethereum identity project or social media profile
+     */
     function joinCongress(string _identityDescription, string _identityLink) public returns (bool success) {
+        // the 0x0 address is blocked from votes by xfundToken.voteOnCongress(...). This is important.
         require(xfundToken.balanceOf(msg.sender) > 0);                       // Has tokens
         require(members[memberId[msg.sender]].memberAddress != msg.sender); // not already a member
         //require(xfundToken.voteList(msg.sender) == 0x0);                     // Has not nominated anyone.  (removed)
@@ -185,10 +218,15 @@ contract XfundCongress is owned, tokenRecipient {
         }
     }
 
+    /// @notice Get current size of congress
     function getCongressSize() constant public returns (uint256) {
         return members.length;
     }
 
+    /**
+     * Update which congressperson has the veto power by finding the member with maximum votes
+     *
+     */
     function updateVetoPower() onlyOwner public returns (address updatedVetoPower) {
         // if no members have any votes, this sets the vetoPower to 0x0
         // updatedVetoPower already set to 0x0
@@ -254,7 +292,7 @@ contract XfundCongress is owned, tokenRecipient {
         returns (uint proposalID)
     {
         require(congressActive);
-        require(now > december25 + 6 hours);
+        require(now > december25UTC + 6 hours);
         require(debatingPeriodInMinutes >= minDebatingPeriodInMinutes);
         proposalID = proposals.length++;
         Proposal storage p = proposals[proposalID];
@@ -396,6 +434,7 @@ contract XfundCongress is owned, tokenRecipient {
         ProposalTallied(proposalNumber, 100 * p.yeas / p.numberOfVotes, p.numberOfVotes, p.proposalPassed);
     }
 
+    /// @notice Destroy contract and send ether to `supersedingCongress`
     function selfDestruct() onlyOwner public {
         require(supersedingCongress != address(0));
         require(supersedingCongress != address(this));
